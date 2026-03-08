@@ -12,11 +12,8 @@ app.use("/frontend", express.static(path.join(__dirname, "frontend")));
 
 // ─── DATABASE ─────────────────────────────────────────────────────────────────
 const pool = new Pool({
-    user: "postgres",
-    host: "localhost",
-    database: "blood-donor-db",
-    password: "1234",  
-    port: 5432,
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
 });
 
 // Create tables if they don't exist yet
