@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BEACON | Emergency Blood Connect</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        :root {
+            --red: #cc0000;
+            --red-light: #ff4444;
+            --navy: #0a192f;
+            --navy-light: #112240;
+            --cream: #fdfaf5;
+            --green: #2ecc71;
+            --gold: #f1c40f;
+            --blue: #3498db;
+            --shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background: var(--cream);
+            margin: 0;
+            padding-bottom: 60px;
+            color: #333;
+        }
+
+        /* ── HEADER ── */
+        header {
+            background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%);
+            color: white;
+            padding: 40px 20px 30px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        header::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at 50% 0%, rgba(204,0,0,0.15) 0%, transparent 70%);
+        }
+        header h1 {
+            font-size: 3rem;
+            color: var(--red);
+            margin: 0 0 6px;
+            font-weight: 900;
+            letter-spacing: 8px;
+            text-shadow: 0 0 40px rgba(204,0,0,0.4);
+            position: relative;
+        }
+        header p {
+            font-weight: 700;
+            opacity: 0.75;
+            margin: 0;
+            letter-spacing: 2px;
+            font-size: 0.75rem;
+            position: relative;
+        }
+
+        /* ── LOCATION STATUS BAR ── */
+        #locationBar {
+            background: var(--navy);
+            color: #aaa;
+            text-align: center;
+            padding: 8px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+        #locationBar.got { background: #0d3320; color: var(--green); }
+        #locationBar.err { background: #2d0a0a; color: #ff6666; }
+
+        /* ── CONTAINER ── */
+        .container { max-width: 1200px; margin: 25px auto; padding: 0 20px; }
+
+        /* ── LIVE ALERTS ── */
+        .sos-container {
+            background: #fff;
+            border: 1px solid #eee;
+            padding: 15px 20px;
+            border-radius: 14px;
+            margin-bottom: 25px;
+            box-shadow: var(--shadow);
+        }
+        .sos-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .sos-title { margin: 0; color: var(--red); font-size: 0.85rem; font-weight: 800; letter-spacing: 1px; }
+        .sos-list { display: flex; overflow-x: auto; gap: 12px; padding-bottom: 5px; }
+        .sos-card {
+            min-width: 220px;
+            background: #fff5f5;
+            padding: 12px 15px;
+            border-radius: 10px;
+            border-left: 4px solid var(--red);
+            font-size: 0.82rem;
+            animation: pulse-border 2s ease-in-out infinite;
+        }
+        @keyframes pulse-border {
+            0%, 100% { border-left-color: var(--red); }
+            50% { border-left-color: var(--red-light); }
+        }
+        .sos-time { font-size: 0.68rem; color: #999; margin-top: 4px; }
+        .admin-btns button {
+            background: none; border: none; cursor: pointer;
+            font-size: 0.7rem; font-weight: bold; margin-left: 10px;
+        }
+
+        /* ── GRID ── */
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+
+        /* ── CARDS ── */
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .card:hover { transform: translateY(-3px); box-shadow: 0 20px 50px rgba(0,0,0,0.13); }
+        .card h3 { margin: 0 0 18px; font-size: 1rem; font-weight: 800; }
+
+        .wellness-card i.icon { font-size: 2rem; margin-bottom: 12px; display: block; }
+        .wellness-list { text-align: left; font-size: 0.83rem; padding: 0; list-style: none; margin: 0; }
+        .wellness-list li { margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+
+        /* ── TABLE ── */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.8rem; }
+        th { background: var(--navy); color: white; padding: 10px 14px; }
+        td { padding: 10px 14px; border-bottom: 1px solid #f0f0f0; text-align: center; font-weight: 600; }
+        tr:last-child td { border-bottom: none; }
+
+        /* ── INPUTS ── */
+        input, select {
+            width: 100%; padding: 12px 14px; margin: 6px 0;
+            border: 1.5px solid #e0e0e0; border-radius: 9px;
+            font-family: 'Montserrat', sans-serif; font-size: 0.85rem;
+            transition: border-color 0.2s;
+            background: #fafafa;
+        }
+        input:focus, select:focus { outline: none; border-color: var(--blue); background: #fff; }
+
+        /* ── BUTTONS ── */
+        .btn {
+            width: 100%; padding: 14px; color: white; border: none;
+            border-radius: 9px; font-weight: 800; cursor: pointer;
+            text-transform: uppercase; letter-spacing: 1px;
+            font-family: 'Montserrat', sans-serif; font-size: 0.82rem;
+            margin-top: 10px; transition: opacity 0.2s, transform 0.1s;
+        }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn:active { transform: translateY(0); }
+        .btn-red { background: linear-gradient(135deg, #cc0000, #ff2222); }
+        .btn-navy { background: linear-gradient(135deg, var(--navy), #1a3a6f); }
+        .btn-green { background: linear-gradient(135deg, #27ae60, var(--green)); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* ── RESULTS ── */
+        #results { max-height: 280px; overflow-y: auto; margin-top: 12px; border-top: 1px solid #eee; }
+        .donor-card {
+            padding: 14px; border-bottom: 1px solid #f5f5f5;
+            transition: background 0.15s;
+        }
+        .donor-card:hover { background: #fafafa; }
+        .donor-team { color: var(--red); font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+        .donor-name { font-weight: 700; font-size: 0.95rem; margin: 3px 0; }
+        .donor-phone { font-size: 0.78rem; color: #666; }
+        .donor-dist { font-size: 0.75rem; font-weight: 800; color: var(--green); margin-top: 3px; }
+        .donor-dist.unavailable { color: #aaa; font-weight: 600; }
+
+        /* ── MAP ── */
+        #map {
+            width: 100%; height: 420px;
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            border: 2px solid #e8e8e8;
+            z-index: 1;
+        }
+        .map-legend {
+            display: flex; gap: 15px; flex-wrap: wrap;
+            margin-top: 12px; font-size: 0.75rem; font-weight: 600;
+        }
+        .legend-item { display: flex; align-items: center; gap: 6px; }
+        .legend-dot {
+            width: 12px; height: 12px; border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        /* ── STATS BAR ── */
+        .stats-bar {
+            background: var(--navy);
+            border-radius: 14px;
+            padding: 20px 30px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+            margin-bottom: 25px;
+            box-shadow: var(--shadow);
+        }
+        .stat-item { text-align: center; color: white; }
+        .stat-num { font-size: 2rem; font-weight: 900; color: var(--red); line-height: 1; }
+        .stat-label { font-size: 0.68rem; opacity: 0.7; font-weight: 600; letter-spacing: 1px; margin-top: 4px; }
+
+        /* ── TOAST ── */
+        #toast {
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px);
+            background: var(--navy); color: white; padding: 12px 28px;
+            border-radius: 50px; font-size: 0.82rem; font-weight: 700;
+            transition: transform 0.4s ease; z-index: 9999; pointer-events: none;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+        }
+        #toast.show { transform: translateX(-50%) translateY(0); }
+        #toast.success { border-left: 4px solid var(--green); }
+        #toast.error { border-left: 4px solid var(--red); }
+
+        /* ── SPINNER ── */
+        .spinner {
+            display: inline-block; width: 14px; height: 14px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white; border-radius: 50%;
+            animation: spin 0.7s linear infinite; margin-right: 8px;
+            vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── SECTION TITLES ── */
+        .section-title {
+            font-size: 0.7rem; font-weight: 800; letter-spacing: 3px;
+            color: #999; text-transform: uppercase; margin: 30px 0 15px;
+        }
+
+        @media (max-width: 600px) {
+            header h1 { font-size: 2rem; }
+            .stats-bar { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body onload="initApp()">
+
+<header>
+    <h1>BEACON</h1>
+    <p>THE LIGHT IN LIFE'S CRITICAL MOMENTS</p>
+</header>
+
+<div id="locationBar">⏳ ACQUIRING YOUR LOCATION...</div>
+
+<div class="container">
+
+    <!-- STATS BAR -->
+    <div class="stats-bar">
+        <div class="stat-item">
+            <div class="stat-num" id="statDonors">—</div>
+            <div class="stat-label">Guardians</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-num" id="statSOS">—</div>
+            <div class="stat-label">Active Alerts</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-num" id="statTypes">8</div>
+            <div class="stat-label">Blood Types</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-num">24/7</div>
+            <div class="stat-label">Live Network</div>
+        </div>
+    </div>
+
+    <!-- LIVE ALERTS -->
+    <div class="sos-container">
+        <div class="sos-header">
+            <h4 class="sos-title"><i class="fas fa-bolt"></i> LIVE ALERTS</h4>
+            <div class="admin-btns">
+                <button onclick="forceSeed()" style="color:var(--green);">PUSH DONORS</button>
+                <button onclick="resetDB()" style="color:#ccc;">FIX DB</button>
+            </div>
+        </div>
+        <div id="sosList" class="sos-list">
+            <div style="color:#aaa; font-size:0.82rem; padding:10px;">Loading alerts...</div>
+        </div>
+    </div>
+
+    <!-- INFO CARDS -->
+    <div class="grid">
+        <div class="card" style="border-top: 5px solid var(--blue);">
+            <i class="fas fa-clipboard-question icon" style="color: var(--blue);"></i>
+            <h3>Can I Donate?</h3>
+            <ul class="wellness-list">
+                <li><i class="fas fa-check" style="color:var(--green);"></i> Age 18–65 | Weight &gt;50 kg</li>
+                <li><i class="fas fa-check" style="color:var(--green);"></i> No meds (48h) | No Malaria</li>
+                <li><i class="fas fa-check" style="color:var(--green);"></i> Last donation &gt; 3 months ago</li>
+            </ul>
+        </div>
+        <div class="card" style="border-top: 5px solid var(--gold);">
+            <h3>Compatibility Matrix</h3>
+            <table>
+                <tr><th>Donor</th><th>Can Give To</th></tr>
+                <tr><td style="color:var(--red); font-weight:900;">O−</td><td>Universal Donor</td></tr>
+                <tr><td>O+</td><td>O+, A+, B+, AB+</td></tr>
+                <tr><td>A−</td><td>A−, A+, AB−, AB+</td></tr>
+                <tr><td>A+</td><td>A+, AB+</td></tr>
+                <tr><td>B−</td><td>B−, B+, AB−, AB+</td></tr>
+                <tr><td>B+</td><td>B+, AB+</td></tr>
+                <tr><td>AB−</td><td>AB−, AB+</td></tr>
+                <tr><td style="color:var(--blue); font-weight:900;">AB+</td><td>Universal Recipient</td></tr>
+            </table>
+        </div>
+    </div>
+
+    <!-- LIVE MAP -->
+    <p class="section-title"><i class="fas fa-map-marked-alt"></i> Live Network Map</p>
+    <div class="card" style="padding: 20px;">
+        <div id="map"></div>
+        <div class="map-legend">
+            <div class="legend-item"><div class="legend-dot" style="background:#2ecc71;"></div> Guardian (Donor)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#cc0000;"></div> SOS Alert</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#3498db;"></div> Your Location</div>
+        </div>
+    </div>
+
+    <!-- FIND DONOR + REGISTER -->
+    <p class="section-title"><i class="fas fa-users"></i> Guardian Network</p>
+    <div class="grid">
+        <div class="card" style="border-top: 5px solid var(--navy);">
+            <h3>Find Nearest Donor</h3>
+            <select id="findGroup">
+                <option value="All">All Blood Groups</option>
+                <option>O-</option><option>O+</option>
+                <option>A-</option><option>A+</option>
+                <option>B-</option><option>B+</option>
+                <option>AB-</option><option>AB+</option>
+            </select>
+            <button class="btn btn-navy" id="searchBtn" onclick="search()">
+                SEARCH BY PROXIMITY
+            </button>
+            <div id="results"></div>
+        </div>
+        <div class="card" style="border-top: 5px solid var(--green);">
+            <h3>Join the Registry</h3>
+            <input id="rName" placeholder="Your Full Name">
+            <input id="rPhone" placeholder="Contact Number" type="tel">
+            <input id="rLoc" placeholder="Your Area (e.g. Sopore)">
+            <select id="rBlood">
+                <option>O-</option><option>O+</option>
+                <option>A-</option><option>A+</option>
+                <option>B-</option><option>B+</option>
+                <option>AB-</option><option>AB+</option>
+            </select>
+            <button class="btn btn-green" id="registerBtn" onclick="register()">
+                BECOME A GUARDIAN
+            </button>
+        </div>
+    </div>
+
+    <!-- WELLNESS -->
+    <p class="section-title"><i class="fas fa-heart"></i> Care Guidelines</p>
+    <div class="grid">
+        <div class="card wellness-card" style="border-top: 5px solid var(--green);">
+            <i class="fas fa-apple-whole icon" style="color: var(--green);"></i>
+            <h3>Guardian Wellness</h3>
+            <ul class="wellness-list">
+                <li><i class="fas fa-tint" style="color:var(--blue);"></i> Drink 500ml water before arriving.</li>
+                <li><i class="fas fa-utensils" style="color:var(--gold);"></i> Eat a low-fat meal 2 hours prior.</li>
+                <li><i class="fas fa-bed" style="color:#9b59b6;"></i> Get at least 6 hours of sleep.</li>
+            </ul>
+        </div>
+        <div class="card wellness-card" style="border-top: 5px solid var(--blue);">
+            <i class="fas fa-kit-medical icon" style="color: var(--blue);"></i>
+            <h3>Recipient Care</h3>
+            <ul class="wellness-list">
+                <li><i class="fas fa-eye" style="color:var(--red);"></i> Monitor site for redness or swelling.</li>
+                <li><i class="fas fa-egg" style="color:var(--gold);"></i> Focus on high-protein recovery diet.</li>
+                <li><i class="fas fa-stethoscope" style="color:var(--green);"></i> Follow up with your doctor in 48h.</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- EMERGENCY SUPPORT -->
+    <p class="section-title"><i class="fas fa-ambulance"></i> Emergency Broadcast</p>
+    <div class="card" style="border-top: 5px solid var(--red);">
+        <h3>Request Emergency Support</h3>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+            <input id="sPat" placeholder="Patient Name">
+            <input id="sPhone" placeholder="Emergency Contact" type="tel">
+            <input id="sHosp" placeholder="Hospital Name">
+            <select id="sBlood">
+                <option>O-</option><option>O+</option>
+                <option>A-</option><option>A+</option>
+                <option>B-</option><option>B+</option>
+                <option>AB-</option><option>AB+</option>
+            </select>
+            <input id="sLoc" placeholder="Hospital Area (e.g. Sopore)" style="grid-column: 1 / -1;">
+        </div>
+        <button class="btn btn-red" id="sosBtn" onclick="postSOS()">
+            🚨 ACTIVATE BROADCAST
+        </button>
+    </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════════
+const API = "beacon-blood-connect-production.up.railway.app";
+const DEF_LAT = 34.298, DEF_LNG = 74.466;   // Sopore fallback
+const REGION_HINT = ', Kashmir, India';
+
+const TEAMS = {
+    'O-':'Foundation Guardians','O+':'Heartbeat Circle',
+    'A+':'Pillars of Strength','A-':'Rare Protectors',
+    'B+':'Keystone Collective','B-':'Precious Gems',
+    'AB+':'Golden Alliance','AB-':'Phoenix Society'
+};
+
+const GROUP_COLORS = {
+    'O-':'#cc0000','O+':'#e74c3c','A+':'#2980b9','A-':'#1abc9c',
+    'B+':'#8e44ad','B-':'#d35400','AB+':'#f39c12','AB-':'#27ae60'
+};
+
+// ═══════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════
+let userLat = null, userLng = null;
+let map = null, userMarker = null;
+const donorMarkers = [], sosMarkers = [];
+
+// ═══════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════
+async function initApp() {
+    initMap();
+    await resolveLocation();
+    await Promise.all([loadSOS(), loadStats()]);
+}
+
+// ═══════════════════════════════════════════════
+//  LOCATION
+// ═══════════════════════════════════════════════
+function resolveLocation() {
+    return new Promise((resolve) => {
+        const bar = document.getElementById('locationBar');
+
+        if (!navigator.geolocation) {
+            setDefaultLocation(bar);
+            resolve({ lat: userLat, lng: userLng });
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                userLat = pos.coords.latitude;
+                userLng = pos.coords.longitude;
+                bar.textContent = `📍 LOCATION ACQUIRED — ${userLat.toFixed(4)}, ${userLng.toFixed(4)}`;
+                bar.className = 'got';
+                updateUserPin(userLat, userLng);
+                resolve({ lat: userLat, lng: userLng });
+            },
+            () => {
+                setDefaultLocation(bar);
+                resolve({ lat: userLat, lng: userLng });
+            },
+            { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+        );
+    });
+}
+
+function setDefaultLocation(bar) {
+    userLat = DEF_LAT; userLng = DEF_LNG;
+    bar.textContent = '⚠️ USING DEFAULT LOCATION (Sopore) — Enable GPS for accurate distance';
+    bar.className = 'err';
+    updateUserPin(userLat, userLng);
+}
+
+// ═══════════════════════════════════════════════
+//  GEOCODE area name → { lat, lng }
+// ═══════════════════════════════════════════════
+async function geocodeArea(areaName) {
+    try {
+        const q = encodeURIComponent(areaName + REGION_HINT);
+        const res = await fetch(
+            `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`,
+            { headers: { 'Accept-Language': 'en' } }
+        );
+        const data = await res.json();
+        if (data.length > 0) {
+            return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+        }
+    } catch (e) { /* silent */ }
+    return null;
+}
+
+// ═══════════════════════════════════════════════
+//  DISTANCE (Haversine)
+// ═══════════════════════════════════════════════
+function getDist(lat1, lon1, lat2, lon2) {
+    if (lat1 == null || lat2 == null) return Infinity;
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2
+        + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180)
+        * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function fmtDist(km) {
+    if (km === Infinity) return 'Unknown';
+    if (km < 1) return (km * 1000).toFixed(0) + ' m away';
+    return km.toFixed(2) + ' km away';
+}
+
+// ═══════════════════════════════════════════════
+//  MAP
+// ═══════════════════════════════════════════════
+function initMap() {
+    map = L.map('map').setView([DEF_LAT, DEF_LNG], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 18
+    }).addTo(map);
+}
+
+function updateUserPin(lat, lng) {
+    if (!map) return;
+    if (userMarker) map.removeLayer(userMarker);
+    userMarker = L.circleMarker([lat, lng], {
+        radius: 10, color: '#fff', weight: 3,
+        fillColor: '#3498db', fillOpacity: 1
+    }).addTo(map).bindPopup('<b>📍 Your Location</b>');
+    map.setView([lat, lng], 12);
+}
+
+function addDonorPin(donor) {
+    if (!map || !donor.lat || !donor.lng) return;
+    const color = GROUP_COLORS[donor.blood_group.trim()] || '#555';
+    const marker = L.circleMarker([donor.lat, donor.lng], {
+        radius: 8, color: '#fff', weight: 2,
+        fillColor: color, fillOpacity: 0.9
+    }).addTo(map)
+    .bindPopup(`
+        <b>${donor.name}</b><br>
+        <span style="color:${color}; font-weight:bold;">${donor.blood_group}</span><br>
+        <small>📞 +91 ${donor.phone}</small><br>
+        <small>${donor.area_name || ''}</small>
+    `);
+    donorMarkers.push(marker);
+}
+
+function addSOSPin(req) {
+    if (!map || !req.lat || !req.lng) return;
+    const icon = L.divIcon({
+        html: `<div style="background:#cc0000; color:white; border-radius:50%; width:28px; height:28px;
+                            display:flex; align-items:center; justify-content:center;
+                            font-size:14px; border:3px solid white;
+                            box-shadow:0 0 8px rgba(204,0,0,0.6);">🩸</div>`,
+        className: '', iconSize: [28, 28], iconAnchor: [14, 14]
+    });
+    const marker = L.marker([req.lat, req.lng], { icon }).addTo(map)
+    .bindPopup(`
+        <b>🚨 SOS — ${req.blood_group} Needed</b><br>
+        ${req.hospital_name}<br>
+        <small>📞 ${req.contact_phone}</small>
+    `);
+    sosMarkers.push(marker);
+}
+
+function clearMapLayer(arr) {
+    arr.forEach(m => map.removeLayer(m));
+    arr.length = 0;
+}
+
+// ═══════════════════════════════════════════════
+//  SEARCH  ← FIXED: shows "Location unavailable"
+//            instead of 0.0 km for default-coord donors
+// ═══════════════════════════════════════════════
+async function search() {
+    const btn = document.getElementById('searchBtn');
+    btn.innerHTML = '<span class="spinner"></span> SEARCHING...';
+    btn.disabled = true;
+
+    try {
+        const group = document.getElementById('findGroup').value;
+        const url = group === 'All'
+            ? `${API}/donors`
+            : `${API}/donors?blood_group=${encodeURIComponent(group)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        const refLat = userLat ?? DEF_LAT;
+        const refLng = userLng ?? DEF_LNG;
+
+        // Sort by NUMERIC distance
+        data.sort((a, b) =>
+            getDist(refLat, refLng, a.lat, a.lng) -
+            getDist(refLat, refLng, b.lat, b.lng)
+        );
+
+        // Refresh donor pins on map
+        clearMapLayer(donorMarkers);
+        data.forEach(addDonorPin);
+
+        document.getElementById('results').innerHTML = data.length
+            ? data.map(d => {
+                const km = getDist(refLat, refLng, d.lat, d.lng);
+                const color = GROUP_COLORS[d.blood_group.trim()] || '#333';
+
+                // ── FIX: detect donors whose coords are missing or stuck at default ──
+                const hasRealLocation = d.lat && d.lng &&
+                    !(d.lat === DEF_LAT && d.lng === DEF_LNG);
+                const distLabel = !hasRealLocation
+                    ? '📍 Location unavailable'
+                    : `📍 ${fmtDist(km)}`;
+                const distClass = !hasRealLocation ? 'donor-dist unavailable' : 'donor-dist';
+
+                return `<div class="donor-card">
+                    <div class="donor-team">${TEAMS[d.blood_group.trim()] || 'Guardian'}</div>
+                    <div class="donor-name">
+                        ${d.name}
+                        <span style="color:${color}; font-size:0.8rem;"> (${d.blood_group})</span>
+                    </div>
+                    <div class="donor-phone">📞 +91 ${d.phone}</div>
+                    <div class="${distClass}">${distLabel}</div>
+                </div>`;
+            }).join('')
+            : `<div style="padding:20px; color:#999; text-align:center; font-size:0.85rem;">No donors found for this blood group.</div>`;
+
+    } catch (e) {
+        showToast('Could not reach server. Is it running?', 'error');
+    }
+
+    btn.innerHTML = 'SEARCH BY PROXIMITY';
+    btn.disabled = false;
+}
+
+// ═══════════════════════════════════════════════
+//  LOAD SOS
+// ═══════════════════════════════════════════════
+async function loadSOS() {
+    try {
+        const res = await fetch(`${API}/requests`);
+        const data = await res.json();
+
+        clearMapLayer(sosMarkers);
+        data.forEach(addSOSPin);
+
+        document.getElementById('statSOS').textContent = data.length;
+
+        document.getElementById('sosList').innerHTML = data.length
+            ? data.map(r => `
+                <div class="sos-card">
+                    <b>${r.blood_group}</b> Needed @ ${r.hospital_name}<br>
+                    <small>${r.contact_phone}</small>
+                    <div class="sos-time"><i class="fas fa-map-marker-alt"></i> ${r.area_name || 'Unknown Area'}</div>
+                </div>`).join('')
+            : `<div style="color:#aaa; font-size:0.82rem; padding:10px;">No active alerts right now.</div>`;
+    } catch (e) { /* server might be starting */ }
+}
+
+// ═══════════════════════════════════════════════
+//  STATS
+// ═══════════════════════════════════════════════
+async function loadStats() {
+    try {
+        const res = await fetch(`${API}/donors`);
+        const data = await res.json();
+        document.getElementById('statDonors').textContent = data.length;
+    } catch (e) { /* ignore */ }
+}
+
+// ═══════════════════════════════════════════════
+//  REGISTER  ← FIXED: warns if geocoding fails
+// ═══════════════════════════════════════════════
+async function register() {
+    const name    = document.getElementById('rName').value.trim();
+    const phone   = document.getElementById('rPhone').value.trim();
+    const area    = document.getElementById('rLoc').value.trim();
+    const blood   = document.getElementById('rBlood').value;
+
+    if (!name || !phone || !area) {
+        showToast('Please fill in all fields.', 'error'); return;
+    }
+
+    const btn = document.getElementById('registerBtn');
+    btn.innerHTML = '<span class="spinner"></span> REGISTERING...';
+    btn.disabled = true;
+
+    // Priority 1: live GPS location
+    // Priority 2: geocode from typed area name
+    // Priority 3: default coordinates (with warning)
+    let lat = userLat, lng = userLng;
+
+    if (!lat || !lng || (lat === DEF_LAT && lng === DEF_LNG)) {
+        const geo = await geocodeArea(area);
+        if (geo) {
+            lat = geo.lat;
+            lng = geo.lng;
+        } else {
+            lat = DEF_LAT;
+            lng = DEF_LNG;
+            showToast('⚠️ Could not find area location — using default', 'error');
+        }
+    }
+
+    try {
+        await fetch(`${API}/donors`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, phone, blood_group: blood, area_name: area, lat, lng })
+        });
+        showToast('✅ Welcome to the Guardian Network!', 'success');
+        document.getElementById('rName').value = '';
+        document.getElementById('rPhone').value = '';
+        document.getElementById('rLoc').value = '';
+        await loadStats();
+        await search();
+    } catch (e) {
+        showToast('Registration failed. Check server.', 'error');
+    }
+
+    btn.innerHTML = 'BECOME A GUARDIAN';
+    btn.disabled = false;
+}
+
+// ═══════════════════════════════════════════════
+//  POST SOS  ← geocodes hospital area
+// ═══════════════════════════════════════════════
+async function postSOS() {
+    const patName  = document.getElementById('sPat').value.trim();
+    const phone    = document.getElementById('sPhone').value.trim();
+    const hosp     = document.getElementById('sHosp').value.trim();
+    const blood    = document.getElementById('sBlood').value;
+    const area     = document.getElementById('sLoc').value.trim();
+
+    if (!patName || !phone || !hosp || !area) {
+        showToast('Please fill in all emergency fields.', 'error'); return;
+    }
+
+    const btn = document.getElementById('sosBtn');
+    btn.innerHTML = '<span class="spinner"></span> BROADCASTING...';
+    btn.disabled = true;
+
+    let lat = userLat, lng = userLng;
+    if (!lat || !lng || (lat === DEF_LAT && lng === DEF_LNG)) {
+        const geo = await geocodeArea(area);
+        if (geo) {
+            lat = geo.lat;
+            lng = geo.lng;
+        } else {
+            lat = DEF_LAT;
+            lng = DEF_LNG;
+            showToast('⚠️ Could not find area location — using default', 'error');
+        }
+    }
+
+    try {
+        await fetch(`${API}/requests`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                patient_name: patName, hospital_name: hosp,
+                blood_group: blood, contact_phone: phone,
+                area_name: area, lat, lng
+            })
+        });
+        showToast('🚨 Emergency broadcast activated!', 'success');
+        document.getElementById('sPat').value = '';
+        document.getElementById('sPhone').value = '';
+        document.getElementById('sHosp').value = '';
+        document.getElementById('sLoc').value = '';
+        await loadSOS();
+    } catch (e) {
+        showToast('Broadcast failed. Check server.', 'error');
+    }
+
+    btn.innerHTML = '🚨 ACTIVATE BROADCAST';
+    btn.disabled = false;
+}
+
+// ═══════════════════════════════════════════════
+//  ADMIN HELPERS
+// ═══════════════════════════════════════════════
+function forceSeed() {
+    fetch(`${API}/seed`).then(() => {
+        showToast('Donors pushed ✓', 'success');
+        search();
+        loadStats();
+    });
+}
+
+function resetDB() {
+    if (!confirm('Reset entire database?')) return;
+    fetch(`${API}/reset`, { method: 'POST' }).then(() => {
+        showToast('DB reset ✓', 'success');
+        loadSOS();
+        loadStats();
+        clearMapLayer(donorMarkers);
+        clearMapLayer(sosMarkers);
+        document.getElementById('results').innerHTML = '';
+    });
+}
+
+// ═══════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════
+function showToast(msg, type = 'success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `show ${type}`;
+    setTimeout(() => { t.className = ''; }, 3200);
+}
+</script>
+</body>
+</html>
